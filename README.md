@@ -1,8 +1,11 @@
-# Pause Games
+# MoonPause
 
 Original Repo: https://github.com/popsUlfr/SDH-PauseGames
 
 This is a continuation of **popsUlfr's Pause Games** plugin, updated to support the latest Decky Loader and new features.
+
+Forked from the "https://github.com/wynn1212/SDH-PauseGames/tree/main" repo mainained by wynn1212. All funtion in the original plugin is untouched, with additional support for auto pause/unpause of the active game upon moonlight streaming loss/resume. The auto streaming pause/unpause works by constantly monitoring the sunshine logs located at "/home/username/.config/sunshine/sunshine.log", looking for "Info: CLIENT CONNECTED" and "Info: CLIENT DISCONNECTED" to trigger the pause/unpase event. 
+
 
 A big thanks to **popsUlfr** for developing this amazing plugin!
 
