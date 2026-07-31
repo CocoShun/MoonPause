@@ -184,8 +184,8 @@ function Content() {
         <ToggleField
           bottomSeparator={autoPause ? "none" : "standard"}
           checked={autoPause}
-          label="Pause on focus loss"
-          tooltip="Pauses apps not in focus when switching between them."
+          label="Pause on focus/streaming loss"
+          tooltip="Pauses apps not in focus when switching between them or when moonlight connection is lost"
           icon={<FaStream />}
           onChange={async (state) => {
             setAutoPause(state);
@@ -225,10 +225,10 @@ function Content() {
           May fix audio issues.
           <br />
           <strong>
-            <em>- Pause on focus loss</em>
+            <em>- Pause on focus/streaming loss</em>
           </strong>
           <br />
-          Automatically pauses apps not in focus while switching between them.
+          Automatically pauses apps not in focus or when moonlight connection is lost.
           Manually setting the state of an app in this mode will sticky them{" "}
           <FaPlay color="deepskyblue" /> <FaPause color="deepskyblue" /> until
           they are manually changed back.
