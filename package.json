@@ -1,5 +1,5 @@
 {
-  "name": "pause-games",
+  "name": "MoonPause",
   "version": "1.0.2",
   "description": "Pause/Resume games to redirect resources and even play/stop apps that don't natively have an immediate option to do so.",
   "packageManager": "pnpm@9.11.0",
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wynn1212/SDH-PauseGames.git"
+    "url": "git+https://github.com/CocoShun/MoonPause"
   },
   "keywords": [
     "decky",
