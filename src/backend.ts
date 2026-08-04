@@ -141,13 +141,27 @@ let lastFocusedGameAppid: number | null = null;
 let activeAppidAtSuspend: number | null = null;
 
 export async function getAppMetaData(appid: number) {
-  if (appMetaDataMap[appid]) {
-    return appMetaDataMap[appid];
+  const cached = appMetaDataMap[appid];
+  if (cached) {
+    // instanceid can end up cached as 0 if this ran before the reaper
+    // process was discoverable yet (e.g. right at game launch, racing
+    // pid_from_appid). Left alone, every future pause/resume/is_paused
+    // call for this app silently no-ops forever (get_all_children(0)
+    // finds nothing), and the only fix is a plugin reload. Keep retrying
+    // the lookup until we get a real pid instead.
+    if (!cached.instanceid) {
+      const pid = await pid_from_appid(appid);
+      if (pid) {
+        cached.instanceid = pid;
+        cached.is_paused = await is_paused(pid);
+      }
+    }
+    return cached;
   }
   const pid = await pid_from_appid(appid);
   return (appMetaDataMap[appid] = {
     instanceid: pid,
-    is_paused: await is_paused(pid),
+    is_paused: pid ? await is_paused(pid) : false,
     pause_state_callbacks: [],
     last_pause_state: false,
     sticky_state: false,
@@ -304,6 +318,7 @@ export function setupSuspendResumeHandler(): () => void {
         appMD.last_pause_state = appMD.is_paused;
         if (!appMD.is_paused) {
           appMD.is_paused = await pause(appMD.instanceid);
+          appMD.pause_state_callbacks.forEach((cb) => cb(appMD.is_paused));
         }
         return a;
       }),
@@ -347,33 +362,62 @@ export function setupSuspendResumeHandler(): () => void {
   // const { unregister: unregisterOnResumeFromSuspend } =
   //   SteamClient.System.RegisterForOnResumeFromSuspend(onResume);
 
-  const suspendresumeObservable = getSuspendResumeObservable();
   //const resumeObservable = getResumeObservable();
 
-  // Note: If newValue is TRUE then it's suspending, otherwise it's resuming.
-  const unregisterOnSuspendRequest = suspendresumeObservable?.observe_((change) => {
-    const { newValue } = change;
-    console.log({ info: `PG-Suspending: mobX suspend triggered with ${newValue}` });
-    if (!newValue) {
-      return;
-    }
-    console.log({ info: `PG: Suspending Games (If toggle is enabled)...` });
-    onSuspend();
-  });
+  // getSuspendResumeObservable() drills into SteamClient's current
+  // SuspendResumeStore object to find its mobx observable box. If Steam
+  // ever tears down and recreates that store (plausible around a
+  // suspend/resume cycle, which is exactly the kind of major internal
+  // state transition that could trigger it), our subscriptions below
+  // would be left listening to an abandoned box - Steam keeps updating
+  // its new one, we never hear about it again, and every future
+  // suspend/resume goes undetected here (systemWillSuspend can get stuck,
+  // set_focused_pid stops being refreshed, etc) until the plugin reloads.
+  // Periodically re-resolve the observable and re-subscribe if the
+  // underlying object identity has changed, so a recreated store gets
+  // picked up without needing a reload.
+  let currentObservable: ReturnType<typeof getSuspendResumeObservable>;
+  let unregisterOnSuspendRequest: (() => void) | undefined;
+  let unregisterOnResumeFromSuspend: (() => void) | undefined;
 
-  const unregisterOnResumeFromSuspend = suspendresumeObservable?.observe_((change) => {
-    const { newValue } = change;
-    console.log({ info: `PG-Resuming: mobX suspend triggered with ${newValue}` });
-    if (newValue) {
+  const subscribeToObservable = () => {
+    const observable = getSuspendResumeObservable();
+    if (!observable || observable === currentObservable) {
       return;
     }
-    console.log({ info: `PG: Resuming Games (If toggle is enabled)...` });
-    onResume();
-  });
+    unregisterOnSuspendRequest?.();
+    unregisterOnResumeFromSuspend?.();
+    currentObservable = observable;
+
+    // Note: If newValue is TRUE then it's suspending, otherwise it's resuming.
+    unregisterOnSuspendRequest = observable.observe_((change) => {
+      const { newValue } = change;
+      console.log({ info: `PG-Suspending: mobX suspend triggered with ${newValue}` });
+      if (!newValue) {
+        return;
+      }
+      console.log({ info: `PG: Suspending Games (If toggle is enabled)...` });
+      onSuspend();
+    });
+
+    unregisterOnResumeFromSuspend = observable.observe_((change) => {
+      const { newValue } = change;
+      console.log({ info: `PG-Resuming: mobX suspend triggered with ${newValue}` });
+      if (newValue) {
+        return;
+      }
+      console.log({ info: `PG: Resuming Games (If toggle is enabled)...` });
+      onResume();
+    });
+  };
+
+  subscribeToObservable();
+  const observableRevalidationTimer = setInterval(subscribeToObservable, 10000);
 
   return () => {
-    unregisterOnSuspendRequest && unregisterOnSuspendRequest();
-    unregisterOnResumeFromSuspend && unregisterOnResumeFromSuspend();
+    clearInterval(observableRevalidationTimer);
+    unregisterOnSuspendRequest?.();
+    unregisterOnResumeFromSuspend?.();
   };
 }
 
