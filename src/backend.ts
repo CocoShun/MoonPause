@@ -488,17 +488,6 @@ export function setupFocusChangeHandler(): () => void {
           fce.focusedApp.appid === 769 &&
           validKeyEvent?.eKey === 0 &&
           Settings.data.overlayPause;
-        // Remember whether the raw event was actually the overlay itself
-        // (appid 769) before the remapping below overwrites appid/pid with
-        // whatever app the overlay happens to be sitting on top of. Some
-        // external triggers (e.g. a streaming host simulating a Steam-button
-        // press when its client disconnects) fire repeated focus-change
-        // events with appid 769 while the overlay is still open - without
-        // this distinction those get remapped to the underlying game's
-        // appid/pid and misread below as "the game regained real focus",
-        // resuming it even though the overlay (not the game) still has
-        // actual focus.
-        const wasOverlayFocused = fce.focusedApp.appid === 769;
         if (!fce.focusedApp.appid || fce.focusedApp.appid === 769) {
           const appid = await appid_from_pid(fce.focusedApp.pid);
           if (appid) {
@@ -525,11 +514,7 @@ export function setupFocusChangeHandler(): () => void {
               return a;
             }
             appMD.is_paused = await is_paused(appMD.instanceid);
-            if (
-              !overlayPause &&
-              !wasOverlayFocused &&
-              appMD.instanceid === fce.focusedApp.pid
-            ) {
+            if (!overlayPause && appMD.instanceid === fce.focusedApp.pid) {
               // this is the focused app
               lastFocusedGameAppid = Number(a.appid);
               // Let the Python backend's own logic (the sunshine
